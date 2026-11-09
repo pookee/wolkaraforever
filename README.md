@@ -23,16 +23,20 @@ WoW Forever 1.60.1.70790: login, character selection and an in-world session on 
 mobile data off while it waits for the local connection, back on once the game starts). What
 it adds:
 
-- **Interface mobile**, a touch add-on in [addons/WolkaraRoue](addons/WolkaraRoue): two spell
-  wheels, one by each stick (the left one mirrors the right), that you turn by dragging a spell
-  (a tap casts), with adjustable spacing; shortcuts and a tile menu, health bars with your
-  portrait, a quest card, and a chat at the bottom between the wheels that switches between the
+- **Interface mobile**, a touch add-on in [addons/WolkaraRoue](addons/WolkaraRoue): a spell
+  wheel by each stick (the left one mirrors the right), that you turn by dragging a spell along
+  it (a tap casts), with four wheels a side, one shown at a time: a diagonal swipe from a spell
+  goes to the next. A long press on a spell starts customising, as on the iPhone's home screen,
+  and dragging it then moves it to another slot. A small "☰" button opens a quick menu and a
+  tile menu; health bars show your portrait and your target's, touching the void drops the
+  target, and a quest card and a chat at the bottom between the wheels switch between the
   players' talk and the system's messages with one touch, and can be put away into a button
   beside the app's keyboard that counts what players say meanwhile. The game's windows (world map,
-  quests, merchants, journal) shrink to fit the screen and stay clear of the sticks, so the
-  map's close button and "Complete quest" can be reached; the minimap's size can be set, or it
-  can be put away. Its settings save themselves after each change: WoW only writes add-on
-  settings on a clean exit, which a phone session rarely gets.
+  quests, merchants, journal, bags) shrink to fit the screen and stay clear of the sticks and the
+  jump, so the map's close button and "Complete quest" can be reached; the minimap's size can be
+  set, or it can be put away. WoW only writes add-on settings on a reload or a clean exit, which
+  a phone session rarely gets: "Done" and "Close" save what changed, and the quick menu's
+  "Enregistrer" saves at any time.
 - **Jumping while running**: the Jump button of the "sticks only" layout sends the game's own
   Space and reaches the whole area under the camera stick.
 - **The app's toolbar at the bottom** (keyboard, mouse, gamepad, settings), centred between the

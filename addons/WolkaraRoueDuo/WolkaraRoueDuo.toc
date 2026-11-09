@@ -1,0 +1,42 @@
+## Interface: 16001
+## Title: Interface mobile Duo |cffffcc66(scarrdi94, essai #26)|r
+## Notes: Spell wheels, free buttons, shortcuts, health bars and chat designed for touch.
+## Author: scarrdi94, pookee (ExoGroupe)
+## Version: 1.0.3-essai3
+## DefaultState: disabled
+## SavedVariablesPerCharacter: WolkaraRoueDB
+
+Core.lua
+Switch.lua
+Language.lua
+Save.lua
+Scale.lua
+Actions.lua
+Picker.lua
+Wheels.lua
+Free.lua
+Turn.lua
+Fan.lua
+QuickBar.lua
+EditMode.lua
+Controls.lua
+KeyboardSignal.xml
+ChatTab.lua
+Placement.lua
+Professions.lua
+Menu.lua
+Shortcuts.lua
+Hud.lua
+Bags.lua
+Windows.lua
+Minimap.lua
+Objectives.lua
+Chat.lua
+Blizzard.lua
+Settings.lua
+Bindings.lua
+Status.lua
+DuoMenu.lua
+Party.lua
+Polish.lua
+Skin.lua

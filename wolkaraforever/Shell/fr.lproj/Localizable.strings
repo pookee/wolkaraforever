@@ -339,6 +339,7 @@
 "touch.composer.send" = "Envoyer";
 "touch.composer.send.hint" = "Maintiens pour écrire dans la zone de texte sélectionnée du jeu plutôt que dans la discussion";
 "touch.autorun" = "Course auto";
+"touch.settings.duoLayout" = "Interface Duo de scarrdi94 (sticks flottants, saut dans le coin)";
 "touch.draft.replace.hint" = "Remplace tout le champ du jeu sélectionné. Un brouillon vide l’efface. N’appuie pas sur Entrée.";
 "touch.draft.clear" = "Effacer le brouillon";
 "touch.keyboard.show" = "Afficher le clavier";

@@ -656,10 +656,10 @@ static const CGFloat AKJumpReachOuter = 146, AKJumpReachInner = 50, AKJumpReachA
     sticksRow.axis = UILayoutConstraintAxisHorizontal; sticksRow.alignment = UIStackViewAlignmentCenter;
     [options addArrangedSubview:sticksRow];
     _floatingSwitch = [UISwitch new]; _floatingSwitch.on = _preferences.floatingSticks;
-    _floatingSwitch.accessibilityLabel = @"iPhone Duo layout";
+    _floatingSwitch.accessibilityLabel = AKHostLocalized(@"touch.settings.duoLayout");
     _floatingSwitch.accessibilityIdentifier = @"wolkaraforever.controls.floatingSticks";
     [_floatingSwitch addTarget:self action:@selector(floatingChanged:) forControlEvents:UIControlEventValueChanged];
-    UIStackView *floatingRow = [[UIStackView alloc] initWithArrangedSubviews:@[[self label:@"iPhone Duo layout (floating sticks, corner Jump)"],_floatingSwitch]];
+    UIStackView *floatingRow = [[UIStackView alloc] initWithArrangedSubviews:@[[self label:AKHostLocalized(@"touch.settings.duoLayout")],_floatingSwitch]];
     floatingRow.axis = UILayoutConstraintAxisHorizontal; floatingRow.alignment = UIStackViewAlignmentCenter;
     [options addArrangedSubview:floatingRow];
     _swapShouldersSwitch = [UISwitch new]; _swapShouldersSwitch.on = !_preferences.swapShoulders;

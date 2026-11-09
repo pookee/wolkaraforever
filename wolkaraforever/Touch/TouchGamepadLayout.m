@@ -1,7 +1,5 @@
 #import "TouchGamepadLayout.h"
 #include <math.h>
-#include <string.h>
-#include <sys/utsname.h>
 
 static NSString *const LayoutKey = @"WolkaraForeverTouchLayoutV1";
 NSNotificationName const AKGamepadLayoutDidChangeNotification = @"AKGamepadLayoutDidChange";
@@ -10,11 +8,6 @@ static CGFloat Clamp(CGFloat value, CGFloat minimum, CGFloat maximum, CGFloat fa
 }
 static CGFloat Number(id value, CGFloat fallback) {
     return [value isKindOfClass:NSNumber.class] ? [value doubleValue] : fallback;
-}
-static BOOL AKIsIPhoneDuo(void) {
-    struct utsname system;
-    if (uname(&system) != 0) return NO;
-    return strcmp(system.machine, "iPhone19,4") == 0;
 }
 @implementation AKGamepadLayout {
     NSUserDefaults *_defaults;
@@ -42,7 +35,9 @@ static BOOL AKIsIPhoneDuo(void) {
         self.swapShoulders = Number(values[@"swapShoulders"],values.count ? 0 : 1) != 0;
         self.performanceOverlayEnabled = Number(values[@"performanceOverlayEnabled"],0) != 0;
         self.sticksOnly = Number(values[@"sticksOnly"],1) != 0;
-        self.floatingSticks = Number(values[@"floatingSticks"],AKIsIPhoneDuo() ? 1 : 0) != 0;
+        // The iPhone Duo layout of jklock/wolkaraforever#26 (scarrdi94), tried here beside our own:
+        // off until the player turns it on, so an install never changes the layout under them.
+        self.floatingSticks = Number(values[@"floatingSticks"],0) != 0;
         _positions = [NSMutableDictionary new];
         id positions = values[@"positions"];
         if ([positions isKindOfClass:NSDictionary.class]) for (NSString *key in positions) {
@@ -84,7 +79,7 @@ static BOOL AKIsIPhoneDuo(void) {
     self.hapticsEnabled = YES; self.swapShoulders = YES;
     self.performanceOverlayEnabled = NO;
     self.sticksOnly = YES;
-    self.floatingSticks = AKIsIPhoneDuo();
+    self.floatingSticks = NO;
     [_positions removeAllObjects]; [self save];
 }
 @end

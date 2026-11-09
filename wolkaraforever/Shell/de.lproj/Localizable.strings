@@ -340,6 +340,7 @@
 "touch.composer.send" = "Senden";
 "touch.composer.send.hint" = "Halten, um statt in den Chat in das ausgewählte Textfeld des Spiels zu schreiben";
 "touch.autorun" = "Automatisch laufen";
+"touch.settings.duoLayout" = "iPhone-Duo-Layout von scarrdi94 (schwebende Sticks, Sprung in der Ecke)";
 "touch.draft.replace.hint" = "Ersetzt das gesamte gewählte Spielfeld. Ein leerer Entwurf leert es. Die Eingabetaste wird nicht gedrückt.";
 "touch.draft.clear" = "Entwurf leeren";
 "touch.keyboard.show" = "Tastatur einblenden";

@@ -340,6 +340,7 @@
 "touch.composer.send" = "Send";
 "touch.composer.send.hint" = "Hold to type into the selected game text box instead of the chat";
 "touch.autorun" = "Auto-run";
+"touch.settings.duoLayout" = "iPhone Duo layout by scarrdi94 (floating sticks, corner Jump)";
 "touch.draft.replace.hint" = "Replaces the whole selected game field. An empty draft clears it. Does not press Return.";
 "touch.draft.clear" = "Clear draft";
 "touch.keyboard.show" = "Show keyboard";

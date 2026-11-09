@@ -5,26 +5,28 @@
 -- centre de l'écran ; les autres sorts attendent hors de l'écran et reviennent quand on la fait
 -- tourner. Elle ne passe jamais sous le stick (à droite, c'est là qu'est le saut).
 --
--- Chaque côté a quatre roues (0.8, demandé sur l'iPhone le 2026-11-09) ; on en voit une à la
--- fois. Un glissé en diagonale depuis un de ses sorts passe à la suivante : vers le centre de
--- l'écran, la suivante ; vers le coin, la précédente. Seules comptent les roues qui ont un sort
--- (toutes en personnalisant). Des points au bout de la diagonale disent laquelle on voit. Un
--- glissé est une diagonale s'il fait au moins PAGE_SWIPE unités et s'écarte de moins de 35° de
--- la diagonale : le long de la roue, là où l'on glisse pour la faire tourner, le doigt va à plus
--- de 45° de là, sur tout le quart visible.
+-- Chaque côté a ses roues : quatre par défaut, de une à six (réglage « Roues »), demandé sur
+-- l'iPhone le 2026-11-09. On en voit une à la fois, vide ou non : une roue vide montre ses cases
+-- (Free.lua), qu'un toucher remplit. On passe à une autre de deux façons, en combat aussi : par
+-- ses onglets numérotés, en arc juste au-dessus de la roue, qui disent aussi laquelle on voit ;
+-- ou d'un glissé en diagonale depuis la roue, vers le centre de l'écran pour la suivante, vers
+-- le coin pour la précédente, en boucle. La roue qui arrive s'allume sort après sort, dans le
+-- sens du glissé. Un glissé est une diagonale s'il fait au moins PAGE_SWIPE unités et s'écarte
+-- de moins de 35° de la diagonale : le long de la roue, là où l'on glisse pour la faire tourner,
+-- le doigt va à plus de 45° de là, sur tout le quart visible.
 --
 -- On la fait tourner en glissant le doigt depuis un de ses sorts, le long de la roue ; toucher
 -- un sort sans glisser le lance, au moment où l'on relève le doigt. Ailleurs, rien n'est capté :
 -- un glissé à côté des sorts reste à la caméra. Hors combat, les sorts suivent le doigt. En
 -- combat, le jeu ne laisse bouger ses boutons que par son code sécurisé, qui ne voit que l'appui
--- et le relâchement : la roue tourne alors d'autant de crans, ou passe à la suivante, au moment
+-- et le relâchement : la roue tourne alors d'autant de crans, ou passe à une autre, au moment
 -- où l'on relève le doigt. Ce code sécurisé ne fait que de l'arithmétique et lit des positions
 -- calculées d'avance. Il ne suit que le bouton gauche : l'appui long, que l'app donne en clic
 -- droit, et le glissé du bouton droit qui le suit sont à Free.lua (déplacer un sort).
 --
 -- La roue de gauche se calcule comme celle de droite vue dans un miroir : mêmes angles, mêmes
 -- crans, positions retournées de gauche à droite. Rien ne dessine les roues : ni disque ni
--- ombre, seuls leurs sorts (et les points des roues) sont à l'écran.
+-- ombre, seuls leurs sorts (et leurs onglets) sont à l'écran.
 --
 -- Le code sécurisé est accroché à chaque sort par le gabarit de l'appui et du relâchement
 -- (attributs _onmousedown et _onmouseup) : le jeu refuse d'envelopper ces deux moments
@@ -44,12 +46,15 @@ ns.Turn = Turn
 
 local SIZE = 64         -- un sort, comme les boutons libres
 local FIRST = 95        -- le premier emplacement, en degrés depuis le bord (sens direct, vu de droite)
+local TAB_LOW = 135     -- l'onglet le plus bas, sur la diagonale du quart visible
 local SWIPE = 0.35      -- en crans : en deçà, le doigt a touché le sort ; au-delà, il a glissé
 local PAGE_SWIPE = 40   -- en unités : la longueur d'un glissé en diagonale qui change de roue
 local DIAGONAL = 2      -- (le long)² ≥ 2 (en travers)² : à moins de 35° de la diagonale
 local REACH = 3         -- la bande dépasse la roue de trois sorts : un glissé qui finit au-delà se lit
-local DOT, DOT_GAP = 10, 16
+local TAB, TAB_GAP = 34, 8          -- un onglet de roue, et l'écart entre deux
+local FADE, STAGGER = 0.22, 0.045   -- une roue qui arrive : chaque sort en FADE, le suivant STAGGER après
 Turn.SWIPE, Turn.PAGE_SWIPE = SWIPE, PAGE_SWIPE
+Turn.FADE, Turn.STAGGER = FADE, STAGGER
 
 local SIDES = {
     right = { key = "free", name = "WolkaraMobileTurn", corner = "BOTTOMRIGHT", mirror = false },
@@ -57,6 +62,7 @@ local SIDES = {
 }
 local ORDER = { "right", "left" }
 local sides, attached = {}, {}
+local animator, playing
 
 local function PageSettings(wheel) return ns.PageData(ns.db[wheel.key], wheel.page) end
 
@@ -120,19 +126,17 @@ end
 local function AngleOf(px, py) return math.deg(math.atan2(py, -px)) end
 
 -- ---------------------------------------------------------------------------------------
--- Les quatre roues d'un côté
+-- Les roues d'un côté
 
--- La roue suivante dans un sens (1 ou -1), parmi celles qu'on peut montrer ; nil sinon.
+-- La roue d'à côté dans un sens (1 ou -1), en boucle parmi les roues du côté ; nil s'il n'y en
+-- a qu'une.
 function Turn.NextPage(side, direction)
     local state = sides[side]
     if not state then return nil end
+    local pages = state.pager:GetAttribute("pages") or 1
+    if pages < 2 then return nil end
     local page = state.pager:GetAttribute("page") or 1
-    local target = page
-    for _ = 1, ns.PAGES - 1 do
-        target = (target - 1 + direction) % ns.PAGES + 1
-        if state.pager:GetAttribute("use" .. target) then return target end
-    end
-    return nil
+    return (page - 1 + direction) % pages + 1
 end
 
 -- Hors combat : montre la roue `page` d'un côté, cache les autres.
@@ -155,40 +159,44 @@ function Turn.CurrentPage(side)
     return state and state.pager:GetAttribute("page") or 1
 end
 
--- Les points des roues, sur la diagonale juste au-delà des sorts, en travers d'elle : un par roue
--- qu'on peut montrer, doré pour celle-ci. Rien quand il n'y en a qu'une.
-local function LayoutDots(wheel, usable, radius)
-    local dots, list = wheel.band.dots, {}
-    for page = 1, ns.PAGES do if usable[page] then list[#list + 1] = page end end
-    local degrees = FIRST + (180 - FIRST) / 2
-    local cx, cy = Point(wheel, radius + SIZE * 0.95, degrees)
-    local tx, ty = -math.sin(math.rad(degrees)), math.cos(math.rad(degrees))
-    if wheel.mirror then tx = -tx end
-    for i, dot in ipairs(dots) do
-        local page = list[i]
-        if #list > 1 and page then
-            local k = i - (#list + 1) / 2
-            dot:ClearAllPoints()
-            dot:SetPoint("CENTER", wheel.band, wheel.corner, cx + k * DOT_GAP * tx, cy + k * DOT_GAP * ty)
-            if page == wheel.page then dot:SetVertexColor(1, 0.82, 0.3, 1) else dot:SetVertexColor(0.8, 0.8, 0.8, 0.55) end
-            dot:Show()
+-- Les onglets d'un côté disent quelle roue on voit : le sien doré, les autres sombres. Rien que
+-- des couleurs, qui changent aussi en combat.
+local function Highlight(state)
+    local page = state.pager:GetAttribute("page") or 1
+    for index, tab in ipairs(state.tabs) do
+        if index == page then
+            tab.face:SetVertexColor(1, 0.82, 0.3, 0.95)
+            tab.rim:SetVertexColor(1, 0.93, 0.62, 1)
+            tab.label:SetTextColor(0.13, 0.09, 0.02, 1)
         else
-            dot:Hide()
+            tab.face:SetVertexColor(0.05, 0.05, 0.08, 0.88)
+            tab.rim:SetVertexColor(1, 0.82, 0.3, 0.45)
+            tab.label:SetTextColor(0.92, 0.92, 0.92, 0.9)
         end
     end
 end
 
-local function MakeDots(band)
-    local dots = {}
-    for i = 1, ns.PAGES do
-        local dot = band:CreateTexture(nil, "OVERLAY")
-        dot:SetTexture(ns.WHITE)
-        dot:SetSize(DOT, DOT)
-        ns.Circle(band, dot)
-        dot:Hide()
-        dots[i] = dot
+-- Les onglets, en arc juste au-dessus de la roue : le plus bas sur la diagonale, les autres en
+-- montant vers le bord de l'écran ; de la 1 à gauche à la dernière à droite, des deux côtés.
+-- Sur l'écran du Duo (951 x 669 points, 2026-11-09), un arc centré sur la diagonale touchait le
+-- coin du chat ; partir de la diagonale vers le haut le laisse libre, jusqu'à six onglets.
+-- Aucun quand il n'y a qu'une roue.
+local function LayoutTabs(state, radius, scale, wheels, count)
+    local info = SIDES[state.side]
+    local distance = radius + SIZE * scale / 2 + 12 + TAB / 2
+    local apart = math.deg((TAB + TAB_GAP) / distance)
+    for index, tab in ipairs(state.tabs) do
+        if wheels > 1 and count > 0 and index <= wheels then
+            -- À droite, la 1 est la plus basse ; à gauche, en miroir, c'est la dernière.
+            local rank = info.mirror and (wheels - index) or (index - 1)
+            local x, y = Point(info, distance, TAB_LOW - rank * apart)
+            tab:ClearAllPoints()
+            tab:SetPoint("CENTER", UIParent, info.corner, x, y)
+            tab:Show()
+        else
+            tab:Hide()
+        end
     end
-    return dots
 end
 
 -- ---------------------------------------------------------------------------------------
@@ -280,6 +288,104 @@ local function Lifted(wheel, button, mouse)
 end
 
 -- ---------------------------------------------------------------------------------------
+-- La roue qui arrive
+
+-- Par-dessus chaque sort, un petit cadre à nous, qui ne prend aucun toucher et n'a pas de code
+-- sécurisé : un voile sombre et un éclat doré. Le sort, bouton protégé du jeu, n'est jamais
+-- touché : l'effet joue aussi en combat. Créé une fois, hors combat.
+local function Effect(button)
+    if button.wmArrive then return button.wmArrive end
+    local fx = CreateFrame("Frame", nil, button)
+    fx:SetAllPoints()
+    fx:EnableMouse(false)
+    fx:SetFrameLevel(button:GetFrameLevel() + 4)
+    fx.veil = ns.Disc(fx, "ARTWORK", 0.02, 0.02, 0.04, 0.92, 4)
+    fx.flash = ns.Disc(fx, "OVERLAY", 1, 0.84, 0.36, 1, 8)
+    fx.flash:SetBlendMode("ADD")
+    fx.flash:SetAlpha(0)
+    fx:Hide()
+    button.wmArrive = fx
+    return fx
+end
+
+local function Finish()
+    if playing then
+        for _, item in ipairs(playing) do item.fx:Hide() end
+        playing = nil
+    end
+    if animator then animator:Hide() end
+end
+
+-- Chaque sort se dévoile à son tour, avec un éclat qui monte puis s'éteint.
+local function Tick()
+    if not playing then Finish(); return end
+    local now, done = GetTime() - playing.start, true
+    for _, item in ipairs(playing) do
+        local p = (now - item.delay) / FADE
+        if p < 1 then done = false end
+        p = math.max(0, math.min(1, p))
+        local eased = 1 - (1 - p) * (1 - p)
+        item.fx.veil:SetAlpha(1 - eased)
+        item.fx.flash:SetAlpha(0.55 * math.sin(math.pi * p))
+    end
+    if done then Finish() end
+end
+
+-- `wheel` vient de paraître à la place de la roue `before` : ses sorts à l'écran s'allument du
+-- haut de la roue vers le bas pour la suivante (ou par un onglet), de bas en haut pour la
+-- précédente.
+local function Animate(wheel, before)
+    Finish()
+    local band, buttons = wheel.band, wheel.buttons
+    local count = band:GetAttribute("count") or 0
+    if count < 1 or not buttons or not animator then return end
+    local pages = wheel.state.pager:GetAttribute("pages") or 1
+    local backward = pages > 2 and wheel.page == (before - 2) % pages + 1
+    local offset, step = band:GetAttribute("offset") or 0, band:GetAttribute("step") or 20
+    local list, last = {}, 0
+    for index = 1, math.min(count, #buttons) do
+        local button = buttons[index]
+        local slot = (index - 1 + offset) % count
+        -- Seulement ce qui se voit : une case affichée, sur le quart de roue à l'écran.
+        if button.wmArrive and button:IsShown() and FIRST + slot * step <= 182 then
+            list[#list + 1] = { fx = button.wmArrive, slot = slot }
+            last = math.max(last, slot)
+        end
+    end
+    if #list == 0 then return end
+    for _, item in ipairs(list) do
+        item.delay = (backward and (last - item.slot) or item.slot) * STAGGER
+        item.fx.veil:SetAlpha(1)
+        item.fx.flash:SetAlpha(0)
+        item.fx:Show()
+    end
+    list.start = GetTime()
+    playing = list
+    animator:Show()
+end
+
+-- La roue de ce côté vient de paraître (onglet, diagonale, en combat ou non) : ses onglets le
+-- disent, et elle s'allume. La disposition n'anime rien : elle note elle-même la roue qu'on voit.
+local function Arrived(wheel)
+    local state = wheel.state
+    if state.visible == wheel.page then return end
+    local before = state.visible
+    state.visible = wheel.page
+    Highlight(state)
+    if not before then return end
+    Animate(wheel, before)
+    -- Pour le relire depuis le Mac dans la sauvegarde : combien de roues sont arrivées, dont en
+    -- combat (le code sécurisé n'écrit rien ; ceci, si).
+    if ns.db then
+        local seen = type(ns.db.wheelSeen) == "table" and ns.db.wheelSeen or {}
+        ns.db.wheelSeen = seen
+        seen.arrived = (tonumber(seen.arrived) or 0) + 1
+        if InCombatLockdown() then seen.combat = (tonumber(seen.combat) or 0) + 1 end
+        seen.at = time and time() or nil
+    end
+end
+
+-- ---------------------------------------------------------------------------------------
 -- Le code sécurisé
 
 -- La position du doigt sur la bande, vue de son coin : px vers l'intérieur de l'écran (retourné
@@ -319,6 +425,18 @@ local DIAGONAL_CODE = [=[
     end
 ]=]
 
+-- Montre la roue `target` du côté de `pager`, cache les autres : commun au glissé en diagonale
+-- et aux onglets.
+local SWITCH = [=[
+    for i = 1, ]=] .. ns.PAGES .. [=[ do
+        local band = pager:GetFrameRef("band" .. i)
+        if band then
+            if i == target then band:Show() else band:Hide() end
+        end
+    end
+    pager:SetAttribute("page", target)
+]=]
+
 -- Le bouton de la souris : « button », dans le gabarit de l'appui et du relâchement. S'il ne
 -- venait pas, tout serait pris pour le bouton gauche, comme avant la 0.8.
 local DOWN = [=[
@@ -342,17 +460,9 @@ local UP = [=[
         owner:SetAttribute("swiped", true)
         local pager = owner:GetFrameRef("pager")
         local page, pages = pager:GetAttribute("page"), pager:GetAttribute("pages")
-        local target = page
-        for i = 1, pages - 1 do
-            target = (target - 1 + diagonal) % pages + 1
-            if pager:GetAttribute("use" .. target) then break end
-        end
-        if target ~= page and pager:GetAttribute("use" .. target) then
-            for i = 1, pages do
-                local band = pager:GetFrameRef("band" .. i)
-                if i == target then band:Show() else band:Hide() end
-            end
-            pager:SetAttribute("page", target)
+        if page and pages and pages > 1 then
+            local target = (page - 1 + diagonal) % pages + 1
+]=] .. SWITCH .. [=[
         end
         return
     end
@@ -401,17 +511,48 @@ local CLICK = [=[
     if turns >= ]=] .. SWIPE .. [=[ or turns <= -]=] .. SWIPE .. [=[ then return false end
 ]=]
 
+-- Un onglet touché montre sa roue (gabarit du clic sécurisé : self est l'onglet).
+local TAB_CLICK = [=[
+    local pager = self:GetFrameRef("pager")
+    if not pager then return end
+    local target, pages = self:GetAttribute("page"), pager:GetAttribute("pages")
+    if not target or not pages or target > pages or target == pager:GetAttribute("page") then return end
+]=] .. SWITCH
+
 -- ---------------------------------------------------------------------------------------
 
+-- L'onglet d'une roue : un rond numéroté, cerclé d'or.
+local function MakeTab(state, info, index)
+    local tab = CreateFrame("Button", info.name .. "Tab" .. index, UIParent, "SecureHandlerClickTemplate")
+    tab:SetFrameStrata("LOW")
+    tab:SetSize(TAB, TAB)
+    tab:RegisterForClicks("AnyUp")
+    tab:SetHitRectInsets(-3, -3, -6, -6)
+    tab:SetAttribute("page", index)
+    tab:SetFrameRef("pager", state.pager)
+    tab:SetAttribute("_onclick", TAB_CLICK)
+    tab.rim = ns.Disc(tab, "BACKGROUND", 1, 0.82, 0.3, 0.45, 1)
+    tab.face = ns.Disc(tab, "BORDER", 0.05, 0.05, 0.08, 0.88, -1)
+    tab.label = ns.Label(tab, "GameFontNormal", tostring(index))
+    tab.label:SetPoint("CENTER", 0, 0)
+    local glow = ns.Disc(tab, "HIGHLIGHT", 1, 1, 1, 0.2, 0)
+    glow:SetBlendMode("ADD")
+    tab:Hide()
+    return tab
+end
+
 function Turn:Init()
+    animator = CreateFrame("Frame")
+    animator:Hide()
+    animator:SetScript("OnUpdate", Tick)
     for _, side in ipairs(ORDER) do
         local info = SIDES[side]
-        -- Ce qui sait quelle roue on voit, et lesquelles on peut montrer (attributs page, pages,
-        -- use1 à use4), pour le code sécurisé.
+        -- Ce qui sait quelle roue on voit (attribut page) et combien le côté en a (pages), pour
+        -- le code sécurisé du glissé et des onglets.
         local pager = CreateFrame("Frame", info.name .. "Pages", UIParent, "SecureHandlerBaseTemplate")
-        pager:SetAttribute("pages", ns.PAGES)
+        pager:SetAttribute("pages", ns.WHEELS or ns.PAGES)
         pager:SetAttribute("page", 1)
-        local state = { side = side, key = info.key, pager = pager, wheels = {} }
+        local state = { side = side, key = info.key, pager = pager, wheels = {}, tabs = {} }
         for page = 1, ns.PAGES do
             -- Une bande par roue : un carré invisible sur le coin, qui ne prend aucun toucher ; les
             -- sorts de la roue sont ses enfants, si bien que la cacher cache la roue.
@@ -426,10 +567,10 @@ function Turn:Init()
             pager:SetFrameRef("band" .. page, band)
             local wheel = { side = side, key = info.key, page = page, corner = info.corner,
                 mirror = info.mirror, band = band, state = state }
-            band:SetScript("OnUpdate", function() Follow(wheel) end)
-            band.dots = MakeDots(band)
+            band:SetScript("OnUpdate", function() Arrived(wheel); Follow(wheel) end)
             state.wheels[page] = wheel
         end
+        for index = 1, ns.PAGES do state.tabs[index] = MakeTab(state, info, index) end
         sides[side] = state
     end
 end
@@ -438,8 +579,8 @@ end
 -- avant nous).
 function Turn:Attach(pages, side) attached[side or "right"] = pages end
 
--- Une fois, hors combat : chaque sort rejoint la bande de sa roue, avec le code sécurisé et le
--- suivi du doigt.
+-- Une fois, hors combat : chaque sort rejoint la bande de sa roue, avec le code sécurisé, le
+-- suivi du doigt et son effet d'arrivée.
 local function Wrap(state)
     local pages = attached[state.side]
     if state.wrapped or not pages or InCombatLockdown() then return end
@@ -458,12 +599,13 @@ local function Wrap(state)
             SecureHandlerWrapScript(button, "OnClick", band, CLICK)
             button:HookScript("OnMouseDown", function(_, mouse) Pressed(wheel, button, mouse) end)
             button:HookScript("OnMouseUp", function(_, mouse) Lifted(wheel, button, mouse) end)
+            Effect(button)
         end
     end
 end
 
--- Hors combat : la géométrie, les positions d'avance pour le code sécurisé, les roues qu'on peut
--- montrer, celle qu'on voit, puis les sorts.
+-- Hors combat : la géométrie, les positions d'avance pour le code sécurisé, le nombre de roues,
+-- celle qu'on voit, les sorts, puis les onglets.
 local function LayoutSide(state)
     if InCombatLockdown() or not ns.db then return end
     Wrap(state)
@@ -482,18 +624,14 @@ local function LayoutSide(state)
     end
     state.laidOut = true
     local count = math.max(0, math.min(tonumber(settings.count) or 0, ns.MAX_FREE))
-    local usable, first = {}, nil
-    for page = 1, ns.PAGES do
-        usable[page] = ns.editing == true or ns.PageHasEntries(settings, page, count)
-        state.pager:SetAttribute("use" .. page, usable[page])
-        if usable[page] and not first then first = page end
-    end
-    local current = math.max(1, math.min(ns.PAGES, math.floor(tonumber(settings.page) or 1)))
-    if not usable[current] then current = first or 1 end
+    local wheels = math.max(1, math.min(ns.PAGES, math.floor(tonumber(settings.wheels) or ns.WHEELS or 1)))
+    state.pager:SetAttribute("pages", wheels)
+    local current = math.max(1, math.min(wheels, math.floor(tonumber(settings.page) or 1)))
     settings.page = current
     state.pager:SetAttribute("page", current)
     local radius, step = Turn.Geometry(UIParent:GetWidth(), UIParent:GetHeight(), count, settings.spread)
     local size = radius + SIZE * REACH
+    local scale = (settings.scale or 100) / 100
     for page, wheel in ipairs(state.wheels) do
         local band, buttons = wheel.band, wheel.buttons
         -- Un sort de la roue part au relâchement du doigt, pour qu'un glissé puisse l'annuler. Il
@@ -504,7 +642,7 @@ local function LayoutSide(state)
         end
         local n = math.min(count, #buttons)
         band.radius = radius
-        band.buttonScale = (settings.scale or 100) / 100
+        band.buttonScale = scale
         band:SetSize(size, size)
         band:SetAttribute("size", size)
         band:SetAttribute("mirror", wheel.mirror)
@@ -521,13 +659,20 @@ local function LayoutSide(state)
         for index = 1, n do band:SetFrameRef("b" .. index, buttons[index]) end
         band:SetShown(page == current)
         Place(wheel, offset)
-        LayoutDots(wheel, usable, radius)
     end
+    LayoutTabs(state, radius, scale, wheels, count)
+    state.visible = current
+    Highlight(state)
 end
 
 function Turn:Layout()
     for _, side in ipairs(ORDER) do
         if sides[side] then LayoutSide(sides[side]) end
+    end
+    -- La taille de l'écran en unités de l'interface, relue depuis le Mac pour placer les éléments
+    -- (les onglets, le chat, les quêtes se la partagent).
+    if ns.db then
+        ns.db.screenSeen = { width = math.floor(UIParent:GetWidth() + 0.5), height = math.floor(UIParent:GetHeight() + 0.5) }
     end
 end
 

@@ -128,8 +128,8 @@ function Shortcuts:Init()
     dot:SetShown(ns.SavePending ~= nil and ns.SavePending())
     tab.dot = dot
     if ns.OnSavePending then ns.OnSavePending(function(on) dot:SetShown(on) end) end
-    -- Sous la mini-carte, à droite (voir Layout) ; ceci ne sert que sans mini-carte.
-    ns.Movable(tab, function() return ns.db.shortcuts end, "pos", { "TOPRIGHT", "TOPRIGHT", -20, -170 })
+    -- En haut, à gauche de la mini-carte (voir Layout) ; ceci ne sert que sans mini-carte.
+    ns.Movable(tab, function() return ns.db.shortcuts end, "pos", { "TOPRIGHT", "TOPRIGHT", -20, -14 })
 
     panel = CreateFrame("Frame", "WolkaraMobileQuickMenu", UIParent, "SecureHandlerBaseTemplate")
     panel:SetFrameStrata("MEDIUM")
@@ -155,12 +155,16 @@ function Shortcuts:Layout()
     if ns.db.shortcuts.enabled then
         tab:SetScale(ns.db.shortcuts.scale / 100)
         panel:SetScale(ns.db.shortcuts.scale / 100)
-        -- Tant qu'on ne l'a pas déplacé : juste sous la mini-carte, qu'il suit quand elle change
-        -- de taille (sous ses coordonnées).
+        -- Tant qu'on ne l'a pas déplacé : en haut de l'écran, à gauche de la mini-carte et de ses
+        -- boutons + et -, au niveau de son bord haut ; il la suit quand elle change de taille.
+        -- Plus sous elle depuis la 0.9 : il y était trop bas (demandé sur l'iPhone, 2026-11-09).
         local map = _G.Minimap
         if ns.db.shortcuts.pos == nil and map then
+            -- Les boutons + et - (Minimap.lua, disposé après nous) sont là quand la mini-carte l'est.
+            local scale = ns.db.shortcuts.scale / 100
+            local beside = (ns.db.minimap and ns.db.minimap.shown) and (6 + 34 + 10) or 10
             tab:ClearAllPoints()
-            tab:SetPoint("TOPRIGHT", map, "BOTTOMRIGHT", 0, -30)
+            tab:SetPoint("TOPRIGHT", map, "TOPLEFT", -beside / scale, 0)
         else
             tab:PlaceSaved()
         end

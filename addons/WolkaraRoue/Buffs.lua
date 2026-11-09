@@ -1,9 +1,9 @@
 -- Interface mobile : les effets du joueur (améliorations, affaiblissements). Ce sont ceux du jeu,
--- avec leurs durées, leurs bulles d'aide et leur annulation (appui long), mais en petit, juste à
--- droite de ta barre en haut à gauche (rétrécie pour leur faire place), les affaiblissements
--- dessous : à leur place d'origine, en haut à droite près de la mini-carte, ils recouvraient
--- les raccourcis. La carte des quêtes est sous la barre, d'où « à droite ». Barres de vie
--- éteintes, ils reprennent la place que leur donne le jeu.
+-- avec leurs durées, leurs bulles d'aide et leur annulation (appui long), mais en petit, juste
+-- sous ta barre en haut à gauche, les affaiblissements dessous : à leur place d'origine, en haut
+-- à droite près de la mini-carte, ils recouvraient les raccourcis. Ils étaient à droite de ta
+-- barre ; ta cible y est depuis la 0.9.1 (demandé sur l'iPhone, 2026-11-09), et la carte des
+-- quêtes descend sous eux. Barres de vie éteintes, ils reprennent la place que leur donne le jeu.
 --
 -- Le jeu (son Mode Édition) les replace parfois de lui-même : on repasse derrière, hors combat.
 
@@ -20,13 +20,13 @@ local placing, moved, waiting = false, false, false
 local function Apply()
     local player = ns.HudPlayer
     if ns.db.hud.enabled and player then
-        local anchor, relative, x, y = player, "TOPRIGHT", GAP, 0
+        local anchor, relative, x, y = player, "BOTTOMLEFT", 0, -GAP / 2 / SCALE
         for _, name in ipairs(FRAMES) do
             local frame = _G[name]
             if frame and frame.ClearAllPoints then
                 frame:SetScale(SCALE)
                 frame:ClearAllPoints()
-                frame:SetPoint("TOPLEFT", anchor, relative, x / SCALE, y)
+                frame:SetPoint("TOPLEFT", anchor, relative, x, y)
                 anchor, relative, x, y = frame, "BOTTOMLEFT", 0, -4
             end
         end

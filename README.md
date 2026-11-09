@@ -25,11 +25,15 @@ it adds:
 
 - **Interface mobile**, a touch add-on in [addons/WolkaraRoue](addons/WolkaraRoue): a spell
   wheel by each stick (the left one mirrors the right), that you turn by dragging a spell along
-  it (a tap casts), with four wheels a side, one shown at a time: a diagonal swipe from a spell
-  goes to the next. A long press on a spell starts customising, as on the iPhone's home screen,
-  and dragging it then moves it to another slot. A small "☰" button opens a quick menu and a
-  tile menu; health bars show your portrait and your target's, touching the void drops the
-  target, and a quest card and a chat at the bottom between the wheels switch between the
+  it (a tap casts). Each side has several wheels, four by default and one to six in the
+  settings, one shown at a time: numbered tabs just above the wheel switch to another, and so
+  does a diagonal swipe from the wheel (toward the centre the next, toward the corner the
+  previous); the wheel that comes lights up spell after spell, and an empty one shows its slots
+  to be filled. A long press on a spell starts customising, as on the iPhone's home screen,
+  and dragging it then moves it to another slot. A small "☰" button at the top, beside the
+  minimap, opens a quick menu and a tile menu; health bars at the top show your portrait and,
+  right beside them, your target's, with your own effects small under your bar; touching the
+  void drops the target, and a quest card and a chat at the bottom between the wheels switch between the
   players' talk and the system's messages with one touch, and can be put away into a button
   beside the app's keyboard that counts what players say meanwhile. The game's windows (world map,
   quests, merchants, journal, bags) shrink to fit the screen and stay clear of the sticks and the

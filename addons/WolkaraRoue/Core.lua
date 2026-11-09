@@ -12,9 +12,11 @@ local ADDON_NAME, ns = ...
 ns.MAX_WHEELS = 4  -- les roues dorées d'avant la 0.6, gardées pour relire une vieille sauvegarde
 ns.MAX_SLOTS = 12
 ns.MAX_FREE = 12
--- Chaque côté a quatre roues ; on en voit une à la fois, et un glissé en diagonale passe à la
--- suivante (demandé sur l'iPhone, 2026-11-09).
-ns.PAGES = 4
+-- Chaque côté a ses roues de sorts : quatre par défaut, de une à six (réglage « Roues »). On en
+-- voit une à la fois ; un glissé en diagonale ou un onglet au-dessus d'elle passe à une autre,
+-- même vide (demandé sur l'iPhone, 2026-11-09).
+ns.PAGES = 6   -- au plus, de chaque côté
+ns.WHEELS = 4  -- par défaut
 ns.CIRCLE = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 ns.WHITE = "Interface\\Buttons\\WHITE8X8"
 ns.QUESTION = "Interface\\Icons\\INV_Misc_QuestionMark"
@@ -99,7 +101,7 @@ function ns.SetEditing(on)
     ns.Each("SetEditing", ns.editing)
     ns.Layout()
     if ns.editing then
-        ns.Print("mode Personnaliser : touche une case pour choisir son sort, appui long puis glisse pour déplacer un sort, glisse en diagonale pour changer de roue, puis Terminé.")
+        ns.Print("mode Personnaliser : touche une case pour choisir son sort, appui long puis glisse pour déplacer un sort, change de roue par ses onglets ou d'un glissé en diagonale, puis Terminé.")
     end
 end
 
@@ -398,9 +400,10 @@ local function Defaults()
         version = 2,
         wheels = wheels,
         ui = { scale = 170 },
-        -- Chaque côté : `count` cases par roue, et ses quatre roues dans `pages` (sorts et cran).
-        free = { count = 4, scale = 100, spread = 100, page = 1, pages = {} },
-        freeLeft = { count = 4, scale = 100, spread = 100, page = 1, pages = {} },
+        -- Chaque côté : `wheels` roues de `count` cases, leurs sorts et leur cran dans `pages`,
+        -- et `page`, celle qu'on voit.
+        free = { count = 4, wheels = ns.WHEELS, scale = 100, spread = 100, page = 1, pages = {} },
+        freeLeft = { count = 4, wheels = ns.WHEELS, scale = 100, spread = 100, page = 1, pages = {} },
         shortcuts = { enabled = true, scale = 100 },
         -- deselect : toucher le vide (le sol, le ciel) retire la cible.
         hud = { enabled = true, scale = 100, deselect = true },
@@ -448,6 +451,9 @@ local function LoadSettings()
     saved.minimap.scale = ns.Clamp(tonumber(saved.minimap.scale) or 60, 30, 150)
     saved.free.spread = ns.Clamp(tonumber(saved.free.spread) or 100, 60, 180)
     saved.freeLeft.spread = ns.Clamp(tonumber(saved.freeLeft.spread) or 100, 60, 180)
+    for _, key in ipairs({ "free", "freeLeft" }) do
+        saved[key].wheels = ns.Clamp(math.floor(tonumber(saved[key].wheels) or ns.WHEELS), 1, ns.PAGES)
+    end
     saved.ui.scale = ns.Clamp(tonumber(saved.ui.scale) or 170, 100, 220)
     -- La disposition 3 (interface agrandie, éléments placés en proportion de l'écran) remet
     -- une fois les positions par défaut : les anciennes étaient faites pour l'interface d'origine.
@@ -491,10 +497,23 @@ local function LoadSettings()
         end
         saved.layoutVersion = 6
     end
+    -- La disposition 7 (0.9) : le bouton « ☰ » monte en haut de l'écran, à gauche de la
+    -- mini-carte ; sa place d'avant, sous elle, ne lui va plus.
+    if (tonumber(saved.layoutVersion) or 0) < 7 then
+        saved.shortcuts.pos = nil
+        saved.layoutVersion = 7
+    end
+    -- La disposition 8 (0.9.1) : la cible monte tout en haut, à droite de ta barre ; tes effets
+    -- passent sous ta barre et la carte des quêtes sous eux. Leurs places d'avant ne vont plus.
+    if (tonumber(saved.layoutVersion) or 0) < 8 then
+        saved.hud.target = nil
+        saved.quests.pos = nil
+        saved.layoutVersion = 8
+    end
     for _, key in ipairs({ "free", "freeLeft" }) do
         local side = saved[key]
         for page = 1, ns.PAGES do ns.PageData(side, page) end
-        side.page = ns.Clamp(math.floor(tonumber(side.page) or 1), 1, ns.PAGES)
+        side.page = ns.Clamp(math.floor(tonumber(side.page) or 1), 1, side.wheels)
     end
     WolkaraRoueDB = saved
     ns.db = saved
@@ -585,6 +604,7 @@ SlashCmdList.WOLKARAMOBILE = function(message)
                         if type(button) == "table" and button.entry then
                             ns.PageData(ns.db[key], page).buttons[index] = { entry = button.entry }
                             ns.db[key].count = math.max(ns.db[key].count, math.min(index, ns.MAX_FREE))
+                            ns.db[key].wheels = math.max(ns.db[key].wheels, page)
                         end
                     end
                 end

@@ -1,12 +1,13 @@
 -- Interface mobile : le panneau de réglages, tout au toucher (l'engrenage « Mobile » des
--- raccourcis, ou /mobile). Les deux roues de sorts ont leur nombre de cases, leur taille et
--- l'écart de leurs sorts ; les raccourcis, les barres de vie, la cible, le chat, les quêtes et
--- la mini-carte ont les leurs. « Personnaliser » passe en mode déplacement : on fait glisser
--- chaque élément là où le pouce l'attend, et on touche une case pour choisir son sort.
+-- raccourcis, ou /mobile). Les roues de sorts se règlent côté par côté, à droite et à gauche :
+-- combien de roues, combien de sorts sur chacune, leur taille et l'écart entre deux sorts ; les
+-- raccourcis, les barres de vie, la cible, le chat, les quêtes et la mini-carte ont leurs
+-- réglages. « Personnaliser » passe en mode déplacement : on fait glisser chaque élément là où
+-- le pouce l'attend, et on touche une case pour choisir son sort.
 --
 -- Les roues dorées (un bouton qui ouvre un cercle de sorts) et le mode « Arc » des sorts sont
--- partis en 0.8 : on garde les deux roues qui tournent, à gauche et à droite, avec quatre roues
--- chacune (demandé sur l'iPhone, 2026-11-09).
+-- partis en 0.8. Le nombre de roues de chaque côté se choisit ici depuis la 0.9, quatre par
+-- défaut (demandé sur l'iPhone, 2026-11-09).
 
 local _, ns = ...
 
@@ -33,12 +34,13 @@ local function Text(parent, text, x, y, width)
     return label
 end
 
--- [ - ] valeur [ + ]
-local function Stepper(parent, x, y, caption, get, set, step, low, high, suffix)
+-- [ - ] valeur [ + ] ; `reason` dit ce qui a changé dans le journal de la sauvegarde, quand la
+-- légende seule (« Droite ») ne le dit pas.
+local function Stepper(parent, x, y, caption, get, set, step, low, high, suffix, reason)
     local name = Text(parent, caption, x, y - 10)
     local minus = ns.UIButton(parent, "-", 36, 34, function()
         if InCombatLockdown() then return Apply() end
-        set(ns.Clamp(get() - step, low, high)); ns.MarkChanged("réglage : " .. caption); Apply()
+        set(ns.Clamp(get() - step, low, high)); ns.MarkChanged("réglage : " .. (reason or caption)); Apply()
     end)
     minus:SetPoint("TOPLEFT", x + 62, y)
     local value = ns.Label(parent, "GameFontNormal")
@@ -46,7 +48,7 @@ local function Stepper(parent, x, y, caption, get, set, step, low, high, suffix)
     value:SetWidth(50)
     local plus = ns.UIButton(parent, "+", 36, 34, function()
         if InCombatLockdown() then return Apply() end
-        set(ns.Clamp(get() + step, low, high)); ns.MarkChanged("réglage : " .. caption); Apply()
+        set(ns.Clamp(get() + step, low, high)); ns.MarkChanged("réglage : " .. (reason or caption)); Apply()
     end)
     plus:SetPoint("LEFT", value, "RIGHT", 4, 0)
     updaters[#updaters + 1] = function() value:SetText(get() .. (suffix or "")) end
@@ -83,23 +85,34 @@ local function Build()
     Stepper(panel, LEFT + 375, -14, "Interface", function() return ns.db.ui.scale end,
         function(v) ns.db.ui.scale = v end, 10, 100, 220, " %")
 
+    -- Les roues de sorts, une ligne par réglage, la droite puis la gauche : combien de roues,
+    -- combien de sorts sur chacune, leur taille, l'écart entre deux sorts qui se suivent.
     local y = -64
-    for _, side in ipairs({ { key = "free", label = "Sorts à droite" }, { key = "freeLeft", label = "Sorts à gauche" } }) do
-        Text(panel, side.label, LEFT, y - 10, 150)
-        Stepper(panel, LEFT + 175, y, "Cases", function() return ns.db[side.key].count end,
-            function(v) ns.db[side.key].count = v end, 1, 0, ns.MAX_FREE)
-        Stepper(panel, LEFT + 375, y, "Taille", function() return ns.db[side.key].scale end,
-            function(v) ns.db[side.key].scale = v end, 10, 50, 200, " %")
+    local WHEEL_ROWS = {
+        { label = "Roues", field = "wheels", step = 1, low = 1, high = ns.PAGES },
+        { label = "Sorts par roue", field = "count", step = 1, low = 0, high = ns.MAX_FREE },
+        { label = "Taille des sorts", field = "scale", step = 10, low = 50, high = 200, suffix = " %" },
+        { label = "Écart des sorts", field = "spread", step = 10, low = 60, high = 180, suffix = " %" },
+    }
+    for _, row in ipairs(WHEEL_ROWS) do
+        Text(panel, row.label, LEFT, y - 10, 150)
+        for column, side in ipairs({ { key = "free", caption = "Droite" }, { key = "freeLeft", caption = "Gauche" } }) do
+            Stepper(panel, LEFT + 175 + (column - 1) * 200, y, side.caption,
+                function() return ns.db[side.key][row.field] end,
+                function(v) ns.db[side.key][row.field] = v end,
+                row.step, row.low, row.high, row.suffix, row.label:lower() .. " " .. side.caption:lower())
+        end
         y = y - ROW_H
     end
-
-    -- L'écart entre deux sorts qui se suivent sur une roue.
-    Text(panel, "Écart des sorts", LEFT, y - 10, 150)
-    Stepper(panel, LEFT + 175, y, "Droite", function() return ns.db.free.spread end,
-        function(v) ns.db.free.spread = v end, 10, 60, 180, " %")
-    Stepper(panel, LEFT + 375, y, "Gauche", function() return ns.db.freeLeft.spread end,
-        function(v) ns.db.freeLeft.spread = v end, 10, 60, 180, " %")
-    y = y - ROW_H
+    -- Comment passer d'une roue à l'autre, dit là où l'on choisit leur nombre.
+    local hint = ns.Label(panel, "GameFontHighlightSmall",
+        "Changer de roue : touche ses onglets numérotés, au-dessus d'elle, ou glisse en diagonale depuis la roue (vers le centre : la suivante ; vers le coin : la précédente).")
+    hint:SetPoint("TOPLEFT", LEFT, y + 2)
+    hint:SetWidth(660)
+    hint:SetJustifyH("LEFT")
+    hint:SetTextColor(0.75, 0.75, 0.75)
+    panel.wheelHint = hint
+    y = y - 34
 
     Text(panel, "Raccourcis", LEFT, y - 10, 90)
     Switch(panel, LEFT + 90, y, 70, function() return ns.db.shortcuts.enabled end,

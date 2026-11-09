@@ -1,6 +1,6 @@
 -- Interface mobile : les barres de vie. Ton personnage en haut à gauche (vie, ressource,
--- expérience), ta cible en haut au centre (vie, ressource, effets, points de combo), comme
--- dans un jeu mobile. Toucher ta barre te cible toi-même (pour un soin), toucher celle de la
+-- expérience), ta cible tout en haut juste à sa droite (vie, ressource, effets, points de
+-- combo), comme dans un jeu mobile. Toucher ta barre te cible toi-même (pour un soin), toucher celle de la
 -- cible la garde ciblée. La barre de la cible n'apparaît qu'avec une cible, et c'est le jeu
 -- qui la montre ou la cache, combat compris.
 
@@ -10,6 +10,7 @@ local Hud = ns.Register("Barres de vie", {})
 local player, target
 local MAX_AURAS = 10
 local AURA_SIZE = 30
+local PLAYER_WIDTH, TARGET_WIDTH, BESIDE = 280, 240, 8
 
 local function Bar(parent, height, r, g, b)
     local bar = CreateFrame("StatusBar", nil, parent)
@@ -160,12 +161,15 @@ local function Unit(name, unit, width, default)
         frame.combo = ns.Label(frame, "GameFontNormalLarge")
         frame.combo:SetPoint("TOPRIGHT", -8, -1)
         frame.combo:SetTextColor(1, 0.85, 0.2)
-        -- Effets sous la barre : ceux qui gênent d'abord, puis les autres.
+        -- Effets sous la barre : ceux qui gênent d'abord, puis les autres, sur autant de rangs
+        -- que la largeur de la barre en demande.
         frame.auras = {}
+        local perRow = math.max(1, math.floor((width + 3) / (AURA_SIZE + 3)))
         for i = 1, MAX_AURAS do
             local aura = CreateFrame("Frame", nil, frame)
             aura:SetSize(AURA_SIZE, AURA_SIZE)
-            aura:SetPoint("TOPLEFT", frame, "BOTTOMLEFT", (i - 1) * (AURA_SIZE + 3), -3)
+            local row, column = math.floor((i - 1) / perRow), (i - 1) % perRow
+            aura:SetPoint("TOPLEFT", frame, "BOTTOMLEFT", column * (AURA_SIZE + 3), -3 - row * (AURA_SIZE + 3))
             aura.icon = aura:CreateTexture(nil, "ARTWORK")
             aura.icon:SetAllPoints()
             aura.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
@@ -327,11 +331,13 @@ local function Update(frame)
 end
 
 function Hud:Init()
-    -- Plus étroite qu'avant (366) : les effets du joueur tiennent à sa droite, avant les
-    -- raccourcis (demandé sur l'iPhone, 2026-11-09).
-    player = Unit("WolkaraMobilePlayer", "player", 280, { "TOPLEFT", "TOPLEFT", 12, -10 })
-    ns.HudPlayer = player  -- les effets du joueur (Buffs.lua) se rangent à sa droite
-    target = Unit("WolkaraMobileTarget", "target", 330, { "TOP", "TOP", 0, -96 })
+    -- Ta barre en haut à gauche, plus étroite qu'avant (366), tes effets dessous (Buffs.lua) ;
+    -- ta cible tout en haut aussi, juste à sa droite et plus étroite (demandé sur l'iPhone,
+    -- 2026-11-09 : au centre, un cran plus bas, elle était plus large que nécessaire).
+    player = Unit("WolkaraMobilePlayer", "player", PLAYER_WIDTH, { "TOPLEFT", "TOPLEFT", 12, -10 })
+    ns.HudPlayer = player  -- les effets du joueur (Buffs.lua) se rangent dessous
+    target = Unit("WolkaraMobileTarget", "target", TARGET_WIDTH,
+        { "TOPLEFT", "TOPLEFT", 12 + PLAYER_WIDTH + BESIDE, -10 })
     target:Hide()
 end
 

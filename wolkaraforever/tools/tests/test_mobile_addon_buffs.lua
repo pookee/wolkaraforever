@@ -1,6 +1,7 @@
 -- The Interface mobile add-on's player auras (addons/WolkaraRoue/Buffs.lua), run outside the game:
--- the game's own buff and debuff frames go small (65 %) beside the player bar at the top left,
--- debuffs under buffs; the game moving them back (Edit Mode) is undone, never in combat but
+-- the game's own buff and debuff frames go small (65 %) just under the player bar at the top
+-- left, debuffs under buffs - right of the bar is the target's place since 0.9.1 (asked on the
+-- iPhone, 2026-11-09); the game moving them back (Edit Mode) is undone, never in combat but
 -- right after it; with the health bars off they get the game's own place and size back.
 --
 -- usage: luajit test_mobile_addon_buffs.lua <path to Buffs.lua>
@@ -39,12 +40,13 @@ assert(loadfile(path))("WolkaraRoue", ns)
 ns.db = { hud = { enabled = true } }
 module:Init()
 module:Layout()
+-- Under the bar: its left edge, a few units below it (4 at the screen's scale).
 local function Beside()
     return BuffFrame.scale == 0.65 and BuffFrame.point[1] == "TOPLEFT" and BuffFrame.point[2] == ns.HudPlayer
-        and BuffFrame.point[3] == "TOPRIGHT" and DebuffFrame.scale == 0.65 and DebuffFrame.point[2] == BuffFrame
-        and DebuffFrame.point[3] == "BOTTOMLEFT"
+        and BuffFrame.point[3] == "BOTTOMLEFT" and BuffFrame.point[4] == 0 and math.abs(BuffFrame.point[5] * 0.65 + 4) < 1e-9
+        and DebuffFrame.scale == 0.65 and DebuffFrame.point[2] == BuffFrame and DebuffFrame.point[3] == "BOTTOMLEFT"
 end
-assert(Beside(), "the auras did not move beside the player bar")
+assert(Beside(), "the auras did not move under the player bar")
 
 -- The game puts them back by itself: ours again at once.
 BuffFrame:ApplySystemAnchor()
@@ -69,4 +71,4 @@ assert(BuffFrame.point[2] == "MinimapCluster")
 BuffFrame:ApplySystemAnchor()
 assert(BuffFrame.point[2] == "MinimapCluster" and BuffFrame.scale == 1)
 
-print("mobile add-on player auras: small beside the player bar, debuffs under, game re-anchoring undone out of combat, given back with the bars off: PASS")
+print("mobile add-on player auras: small under the player bar, debuffs under them, game re-anchoring undone out of combat, given back with the bars off: PASS")

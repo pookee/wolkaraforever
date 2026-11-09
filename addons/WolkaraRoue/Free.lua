@@ -1,8 +1,10 @@
--- Interface mobile : les sorts autour des sticks. De chaque côté, quatre roues de sorts, dont on
--- voit une à la fois : Turn.lua les fait tourner, et passer de l'une à l'autre d'un glissé en
--- diagonale. Chaque case se remplit par le sélecteur, ou en y lâchant un sort pris dans le
--- grimoire. Une case vide ne paraît qu'en personnalisant, ou quand un sort pris au curseur
--- attend d'y être posé.
+-- Interface mobile : les sorts autour des sticks. De chaque côté, des roues de sorts (quatre par
+-- défaut, réglage « Roues »), dont on voit une à la fois : Turn.lua les fait tourner, et passer
+-- de l'une à l'autre par leurs onglets ou d'un glissé en diagonale. Chaque case se remplit par
+-- le sélecteur, ou en y lâchant un sort pris dans le grimoire. Une case vide ne paraît qu'en
+-- personnalisant, quand un sort pris au curseur attend d'y être posé, ou quand toute sa roue est
+-- vide : une roue vide montre ses cases, pour qu'on la voie, qu'un toucher la remplisse et
+-- qu'un glissé en reparte (demandé sur l'iPhone, 2026-11-09).
 --
 -- L'appui long sur un sort, comme sur l'écran d'accueil de l'iPhone : il passe en mode
 -- Personnaliser, sans lancer le sort, et glisser ensuite déplace ce sort ; lâché sur une autre
@@ -67,17 +69,33 @@ local function BuildGroup(side, key, prefix)
         group.pages[page] = list
     end
 
+    -- Les roues sans aucun sort dans leurs `count` cases.
+    local function EmptyWheels(count)
+        local empty = {}
+        for page, list in ipairs(group.pages) do
+            empty[page] = true
+            for index = 1, math.min(count, #list) do
+                if list[index]:GetEntry() ~= nil then empty[page] = false; break end
+            end
+        end
+        return empty
+    end
+    -- Une case vide ne s'affiche qu'en mode Personnaliser, quand un sort pris dans le grimoire
+    -- attend d'être posé, ou quand toute sa roue est vide : en jeu, une roue remplie ne montre
+    -- que ses sorts (idée de scarrdi94, #26).
+    local function Visible(button, empty)
+        return button:GetEntry() ~= nil or ns.editing or ns.CursorHolds() or empty[button.wmPage] == true
+    end
+
     function group:Layout()
         local count, scale = settings().count, settings().scale / 100
+        local empty = EmptyWheels(count)
         for _, button in ipairs(self.buttons) do
             if button.wmIndex <= count then
                 button:SetScale(scale)
                 -- La roue place elle-même ses sorts, et certains hors de l'écran.
                 button:SetClampedToScreen(false)
-                -- Une case vide ne s'affiche qu'en mode Personnaliser, ou quand un sort pris dans
-                -- le grimoire attend d'être posé : en jeu, l'écran ne montre que des sorts (idée de
-                -- scarrdi94, #26).
-                button:SetShown(button:GetEntry() ~= nil or ns.editing or ns.CursorHolds())
+                button:SetShown(Visible(button, empty))
             else
                 button:Hide()
             end
@@ -88,19 +106,22 @@ local function BuildGroup(side, key, prefix)
     -- Seulement ce qui se voit : un curseur qui prend ou pose un sort.
     function group:Show()
         local count = settings().count
+        local empty = EmptyWheels(count)
         for _, button in ipairs(self.buttons) do
-            if button.wmIndex <= count then
-                button:SetShown(button:GetEntry() ~= nil or ns.editing or ns.CursorHolds())
-            end
+            if button.wmIndex <= count then button:SetShown(Visible(button, empty)) end
         end
     end
 
+    -- Une case vide est pâle ; celles d'une roue vide un peu moins, pour qu'on voie la roue.
     function group:Refresh()
         local count = settings().count
+        local empty = EmptyWheels(count)
         for _, button in ipairs(self.buttons) do
             if button.wmIndex <= count then
                 ns.RefreshButton(button)
-                button:SetAlpha((button:GetEntry() or ns.editing) and 1 or 0.35)
+                local alpha = 1
+                if not button:GetEntry() and not ns.editing then alpha = empty[button.wmPage] and 0.6 or 0.35 end
+                button:SetAlpha(alpha)
             end
         end
     end

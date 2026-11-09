@@ -4,7 +4,8 @@
 --   - the four big shortcuts are now one small menu tab under the minimap: it opens and closes
 --     a compact quick menu by secure code (combat included), each entry closes it, the Menu
 --     entry opens the tiles; it follows the minimap until moved, and goes with the setting off;
---   - an empty spell slot shows only while customising or while a spell waits on the cursor.
+--   - an empty spell slot shows only while customising, while a spell waits on the cursor, or
+--     when its whole wheel is empty (so an empty wheel is seen, filled and left; 2026-11-09).
 -- And from the iPhone (2026-11-09): the target's portrait shows who is selected, and touching
 -- the void drops the target (the game's deselectOnClick, given back as it was when turned off);
 -- the quick menu saves ("Enregistrer") and its tab shows a dot while something waits to be
@@ -56,7 +57,7 @@ UIParent = Frame("Frame", "UIParent")
 
 local handlers = {}
 local modules = {}
-local ns = { MAX_FREE = 12, PAGES = 4, editing = false, RELOAD = "/stopmacro [combat]\n/reload", QUESTION = "?" }
+local ns = { MAX_FREE = 12, PAGES = 6, WHEELS = 4, editing = false, RELOAD = "/stopmacro [combat]\n/reload", QUESTION = "?" }
 local savers, marked = {}, {}
 function ns.OnSavePending(fn) savers[#savers + 1] = fn end
 function ns.SavePending() return false end
@@ -80,6 +81,7 @@ function ns.Circle() return true end
 function ns.EditFrame() return Frame("Texture") end
 function ns.Surface(frame) frame.surfaced = true end
 function ns.Movable(frame, store, key, default)
+    frame.movableDefault = default
     function frame:PlaceSaved()
         local saved = store()[key]
         self.placedFrom = saved and "saved" or "default"
@@ -234,10 +236,21 @@ assert(menuEntry.template == "SecureHandlerClickTemplate")
 menuFrame:Hide(); panel:Show()
 Run(menuEntry, menuEntry:GetAttribute("_onclick"))
 assert(menuFrame.shown and not panel.shown)
--- Placed under the minimap until moved, then where it was put; gone with the setting off.
-ns.db = { shortcuts = { enabled = true, scale = 100 } }
+-- Placed at the top of the screen, left of the minimap and its + and - buttons, until moved
+-- (asked on the iPhone, 2026-11-09: under the minimap it sat too low); then where it was put;
+-- gone with the setting off.
+ns.db = { shortcuts = { enabled = true, scale = 100 }, minimap = { shown = true } }
 Shortcuts:Layout()
-assert(tab.shown and tab.point[1] == "TOPRIGHT" and tab.point[2] == Minimap and tab.point[3] == "BOTTOMRIGHT")
+assert(tab.shown and tab.point[1] == "TOPRIGHT" and tab.point[2] == Minimap and tab.point[3] == "TOPLEFT", "the menu tab is not level with the minimap's top")
+assert(tab.point[4] == -50 and tab.point[5] == 0, "the menu tab is not just left of the minimap's + and - buttons")
+ns.db.minimap.shown = false
+Shortcuts:Layout()
+assert(tab.point[4] == -10, "the menu tab keeps room for the hidden minimap's buttons")
+ns.db.minimap.shown = true
+ns.db.shortcuts.scale = 125
+Shortcuts:Layout()
+assert(math.abs(tab.point[4] + 40) < 1e-9, "the menu tab's gap grows with its size")
+ns.db.shortcuts.scale = 100
 ns.db.shortcuts.pos = { point = "TOPRIGHT", x = -40, y = -200 }
 Shortcuts:Layout()
 assert(tab.placedFrom == "saved")
@@ -263,6 +276,7 @@ function ns.CreateActionButton(name, parent, _, getEntry, setEntry)
     function button.icon:SetAlpha(alpha) self.alpha = alpha end
     function button:IsVisible() return self.shown end
     function button:IsMouseOver() return self == under end
+    function button:SetAlpha(alpha) self.alpha = alpha end
     return button
 end
 ns.ApplyButton, ns.RefreshButton = function() end, function() end
@@ -277,8 +291,12 @@ for i = 1, 12 do right[i] = _G["WolkaraMobileFree" .. i] end
 local function Shown() local list = {} for i = 1, 5 do list[i] = right[i].shown end return list end
 Free:Layout()
 local shown = Shown()
-assert(shown[1] and not shown[2] and shown[3] and not shown[4] and not shown[5], "an empty slot shows in play")
-assert(not _G.WolkaraMobileFreeLeft1.shown, "the empty left wheel shows")
+assert(shown[1] and not shown[2] and shown[3] and not shown[4] and not shown[5], "an empty slot of a wheel with spells shows in play")
+-- A wheel with no spell at all shows its slots, pale: it is seen, a touch fills it, and a swipe
+-- leaves it.
+assert(_G.WolkaraMobileFreeLeft1.shown and _G.WolkaraMobileFreeLeft2.shown and not _G.WolkaraMobileFreeLeft3.shown, "the empty left wheel hides its slots")
+assert(_G.WolkaraMobileFree2_1.shown and _G.WolkaraMobileFree2_4.shown and not _G.WolkaraMobileFree2_5.shown, "the empty second wheel hides its slots")
+assert(right[1].alpha == 1 and _G.WolkaraMobileFreeLeft1.alpha == 0.6, "an empty wheel's slots are not pale, or a spell is")
 -- Customising shows every slot to fill; done, only the spells again.
 ns.editing = true; Free:SetEditing(true)
 shown = Shown()
@@ -289,14 +307,15 @@ assert(not shown[2] and not shown[4])
 -- A spell taken from the spellbook shows where it can go; put down, they go again.
 cursor = "spell"; handlers.CURSOR_CHANGED()
 assert(right[2].shown and right[4].shown, "no empty slot to drop the spell on")
+assert(right[2].alpha == 0.35, "an empty slot of a wheel with spells is not paler")
 cursor = nil; handlers.CURSOR_CHANGED()
 assert(not right[2].shown)
 -- Not in combat: the slots are the game's secure buttons.
 combat = true; cursor = "spell"; handlers.CURSOR_CHANGED()
 assert(not right[2].shown)
 combat = false; cursor = nil
--- Each side has four wheels of twelve slots; the first keeps the names it had.
-assert(_G.WolkaraMobileFree4_12 and _G.WolkaraMobileFreeLeft2_1 and right[1].wmPage == 1 and _G.WolkaraMobileFree3_2.wmPage == 3)
+-- Each side has room for six wheels of twelve slots; the first keeps the names it had.
+assert(_G.WolkaraMobileFree6_12 and _G.WolkaraMobileFreeLeft6_1 and right[1].wmPage == 1 and _G.WolkaraMobileFree3_2.wmPage == 3)
 ns.db.free.pages[2] = { buttons = { { entry = { kind = "spell", id = 1978 } } } }
 Free:Layout()
 assert(_G.WolkaraMobileFree2_1.shown and not _G.WolkaraMobileFree2_2.shown)
@@ -350,6 +369,15 @@ local targetFrame = _G.WolkaraMobileTarget
 assert(targetFrame.portrait and targetFrame.portrait.texture, "the target has no portrait")
 handlers.PLAYER_TARGET_CHANGED()
 assert(portraits.target == targetFrame.portrait.texture, "the target's portrait is not drawn")
+-- At the very top, just right of the player bar, and narrower (asked on the iPhone, 2026-11-09:
+-- centred one notch lower it was wider than needed); its effects wrap into rows under it.
+local spot = targetFrame.movableDefault
+assert(spot[1] == "TOPLEFT" and spot[2] == "TOPLEFT" and spot[3] == 12 + 280 + 8 and spot[4] == -10, "the target is not at the top, right of the player bar")
+local mine = _G.WolkaraMobilePlayer.movableDefault
+assert(mine[1] == "TOPLEFT" and mine[3] == 12 and mine[4] == -10, "the player bar moved")
+local seventh, eighth = targetFrame.auras[7].point, targetFrame.auras[8].point
+assert(seventh[4] == 6 * 33 and seventh[5] == -3, "the first row of effects is not as wide as the bar")
+assert(eighth[2] == targetFrame and eighth[4] == 0 and eighth[5] == -3 - 33, "the effects do not wrap under the narrower bar")
 local cvars = { deselectOnClick = "0" }
 GetCVar = function(name) return cvars[name] end
 SetCVar = function(name, value) cvars[name] = tostring(value) end
@@ -368,4 +396,4 @@ cvars.deselectOnClick = nil
 Hud.Deselect()
 assert(cvars.deselectOnClick == nil and ns.db.hud.deselectWas == nil, "a setting this client does not have was made up")
 
-print("mobile add-on tidy screen: XP percent and rest said, secret health, power and effects handed to the game's bars and texts without stopping the update, one menu tab for a secure quick menu that closes after use, saves and follows the minimap, a dot while something waits, empty slots only to fill them, four wheels a side, long press to Customise and right-drag to move a spell, target portrait, touching the void drops the target: PASS")
+print("mobile add-on tidy screen: XP percent and rest said, secret health, power and effects handed to the game's bars and texts without stopping the update, one menu tab for a secure quick menu that closes after use, saves and follows the minimap, a dot while something waits, at the top left of the minimap, empty slots only to fill them or on an empty wheel, room for six wheels a side, long press to Customise and right-drag to move a spell, target portrait at the top right of the player bar, its effects in rows, touching the void drops the target: PASS")

@@ -40,6 +40,7 @@ local function Frame(kind, name, parent, template)
     function frame:CreateTexture() return Frame("Texture") end
     function frame:SetText(text) self.text = text end
     function frame:SetValue(value) self.value = value end
+    function frame:SetFormattedText(format, ...) self.formatted = { format, ... } end
     function frame:GetFrameLevel() return 1 end
     -- Methods (capitalised, as the game names them) answer anything; a missing field is nil, as on a
     -- real frame.
@@ -142,6 +143,44 @@ assert(not bar.shown and ns.db.xpSeen.hidden == 1)
 blocked = false
 Tick(1)
 assert(bar.shown and ns.db.xpSeen.shown == 2)
+
+-- 1c. Secret values: in a fight this client gives the add-on a health it may only hand to the
+-- game's bars and texts - no sum, no comparison. On the iPhone (save of 2026-11-09) Hud.lua:254
+-- stopped the update 38 times in two minutes, so the power bar and the target's effects stayed
+-- as they were. A bare table behaves the same here: arithmetic or comparison on it fails.
+local SECRET = {}
+local playerFrame, targetFrame = _G.WolkaraMobilePlayer, _G.WolkaraMobileTarget
+local power = 120
+UnitPower = function() return power end
+UnitHealth = function() return SECRET end
+power = 150
+handlers.UNIT_POWER_FREQUENT("player")
+assert(playerFrame.power.value == 150, "a secret health stopped the power bar")
+assert(playerFrame.health.value == SECRET, "the secret health was not handed to its bar")
+assert(playerFrame.health.text.formatted and playerFrame.health.text.formatted[2] == SECRET, "the secret health is not written by the game")
+-- A secret maximum: the bar is still filled and shown.
+UnitPowerMax = function() return SECRET end
+power = 90
+handlers.UNIT_POWER_UPDATE("player")
+assert(playerFrame.power.shown and playerFrame.power.value == 90, "a secret maximum hid the power bar")
+UnitPowerMax = function() return 200 end
+-- The target: its percent from the game, its effects without a secret count or time.
+UnitExists = function() return true end
+UnitIsDead, UnitIsFriend, UnitCanAttack = function() return false end, function() return false end, function() return true end
+GetComboPoints = function() return SECRET end
+UnitHealthPercent = function() return SECRET end
+UnitAura = function(_, index, filter)
+    if index == 1 and filter == "HARMFUL" then return "Poison", "poison-icon", SECRET, nil, SECRET, SECRET end
+end
+handlers.PLAYER_TARGET_CHANGED()
+assert(targetFrame.health.text.formatted and targetFrame.health.text.formatted[1] == "%d %%", "the target's secret health has no percent")
+local poison = targetFrame.auras[1]
+assert(poison.shown, "the target's effect is gone")
+assert(poison.count.text == "" and not poison.cooldown.shown, "a secret count or time was written")
+assert(targetFrame.combo.text == "", "a secret combo count was written")
+UnitHealth = function() return 500 end
+UnitExists = function(unit) return unit == "player" end
+UnitHealthPercent, UnitAura = nil, nil
 
 -- 2. The menu tab and its quick menu.
 local menuFrame = Frame("Frame", "WolkaraMobileMenu")
@@ -329,4 +368,4 @@ cvars.deselectOnClick = nil
 Hud.Deselect()
 assert(cvars.deselectOnClick == nil and ns.db.hud.deselectWas == nil, "a setting this client does not have was made up")
 
-print("mobile add-on tidy screen: XP percent and rest said, one menu tab for a secure quick menu that closes after use, saves and follows the minimap, a dot while something waits, empty slots only to fill them, four wheels a side, long press to Customise and right-drag to move a spell, target portrait, touching the void drops the target: PASS")
+print("mobile add-on tidy screen: XP percent and rest said, secret health, power and effects handed to the game's bars and texts without stopping the update, one menu tab for a secure quick menu that closes after use, saves and follows the minimap, a dot while something waits, empty slots only to fill them, four wheels a side, long press to Customise and right-drag to move a spell, target portrait, touching the void drops the target: PASS")

@@ -30,6 +30,42 @@ local function Short(value)
     return tostring(value)
 end
 
+-- Sur ce client, la vie, la ressource et les effets peuvent être des valeurs « secrètes », en
+-- combat surtout : l'addon ne peut ni les comparer ni calculer avec, seulement les passer aux
+-- barres et aux textes du jeu, qui les dessinent. Sur l'iPhone (sauvegarde du 2026-11-09), la vie
+-- secrète arrêtait la mise à jour en route, 38 fois en deux minutes (Hud.lua:254) : la ressource
+-- et les effets de la cible ne bougeaient plus. Chaque calcul se tente donc à part, et un texte
+-- qui ne peut se calculer passe par les formats du jeu (méthode de scarrdi94, #26).
+local function Fill(bar, value, most)
+    if not pcall(bar.SetMinMaxValues, bar, 0, most) then bar:SetMinMaxValues(0, 1) end
+    if not pcall(bar.SetValue, bar, value) then bar:SetValue(0) end
+end
+
+-- « 1234 / 2000 », ou, d'un secret, ce que le jeu en écrit.
+local function Amounts(label, value, most)
+    local ok, text = pcall(function() return Short(value) .. " / " .. Short(most) end)
+    if ok then label:SetText(text); return end
+    if pcall(label.SetFormattedText, label, "%s / %s", value, most) then return end
+    label:SetText("")
+end
+
+-- « 62 % » de la vie d'une cible, ou, d'un secret, le pour-cent que le jeu calcule lui-même.
+local function Percent(label, unit, value, most)
+    local ok, text = pcall(function() return (most > 0 and math.floor(value * 100 / most + 0.5) or 0) .. " %" end)
+    if ok then label:SetText(text); return end
+    if UnitHealthPercent and pcall(function()
+        label:SetFormattedText("%d %%", UnitHealthPercent(unit, true, CurveConstants and CurveConstants.ScaleTo100))
+    end) then return end
+    label:SetText("")
+end
+
+-- Vrai ou faux si l'on peut lire que `value` dépasse zéro ; nil si c'est un secret.
+local function Positive(value)
+    local ok, positive = pcall(function() return value > 0 end)
+    if ok then return positive end
+    return nil
+end
+
 local function Aura(unit, index, filter)
     if C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
         local aura = C_UnitAuras.GetAuraDataByIndex(unit, index, filter)
@@ -157,14 +193,19 @@ local function UpdateAuras(frame)
             if not icon then break end
             shown = shown + 1
             local aura = frame.auras[shown]
-            aura.icon:SetTexture(icon)
-            aura.count:SetText((count and count > 1) and count or "")
-            if duration and duration > 0 and expiration then
-                aura.cooldown:SetCooldown(expiration - duration, duration)
-                aura.cooldown:Show()
-            else
-                aura.cooldown:Hide()
-            end
+            if not pcall(aura.icon.SetTexture, aura.icon, icon) then aura.icon:SetTexture(ns.QUESTION) end
+            -- Une pile ou une durée secrète ne s'écrit pas : l'effet reste, sans chiffre ni balayage.
+            local counted, stacks = pcall(function() return (count and count > 1) and count or "" end)
+            aura.count:SetText(counted and stacks or "")
+            local timed = pcall(function()
+                if duration and duration > 0 and expiration then
+                    aura.cooldown:SetCooldown(expiration - duration, duration)
+                    aura.cooldown:Show()
+                else
+                    aura.cooldown:Hide()
+                end
+            end)
+            if not timed then aura.cooldown:Hide() end
             aura:Show()
             index = index + 1
         end
@@ -240,7 +281,8 @@ local function Update(frame)
     local unit = frame.unit
     if not UnitExists(unit) then return end
     local level = UnitLevel(unit)
-    local levelText = (level and level > 0) and tostring(level) or "??"
+    local known, levelText = pcall(function() return (level and level > 0) and tostring(level) or "??" end)
+    if not known then levelText = "??" end
     if frame.badge then
         frame.name:SetText(UnitName(unit) or "")
         frame.badge.text:SetText(levelText)
@@ -249,13 +291,11 @@ local function Update(frame)
     end
 
     local health, maxHealth = UnitHealth(unit) or 0, UnitHealthMax(unit) or 0
-    frame.health:SetMinMaxValues(0, math.max(1, maxHealth))
-    frame.health:SetValue(health)
-    local percent = maxHealth > 0 and math.floor(health * 100 / maxHealth + 0.5) or 0
+    Fill(frame.health, health, Positive(maxHealth) == false and 1 or maxHealth)
     if unit == "player" then
-        frame.health.text:SetText(Short(health) .. " / " .. Short(maxHealth))
+        Amounts(frame.health.text, health, maxHealth)
     else
-        frame.health.text:SetText(percent .. " %")
+        Percent(frame.health.text, unit, health, maxHealth)
         if UnitIsDead(unit) then
             frame.health:SetStatusBarColor(0.4, 0.4, 0.4)
         elseif UnitIsFriend("player", unit) then
@@ -265,17 +305,20 @@ local function Update(frame)
         else
             frame.health:SetStatusBarColor(0.9, 0.8, 0.2)
         end
-        local combo = GetComboPoints and GetComboPoints("player", "target") or 0
-        frame.combo:SetText(combo > 0 and ("Combo " .. combo) or "")
+        local combos, combo = pcall(function()
+            local points = GetComboPoints and GetComboPoints("player", "target") or 0
+            return points > 0 and ("Combo " .. points) or ""
+        end)
+        frame.combo:SetText(combos and combo or "")
     end
 
+    -- Une ressource dont on ne peut lire le maximum (secret) reste affichée : le jeu la dessine.
     local power, maxPower = UnitPower(unit) or 0, UnitPowerMax(unit) or 0
-    if maxPower > 0 then
+    if Positive(maxPower) ~= false then
         local color = PowerBarColor and PowerBarColor[UnitPowerType(unit)]
         if color then frame.power:SetStatusBarColor(color.r, color.g, color.b) end
-        frame.power:SetMinMaxValues(0, maxPower)
-        frame.power:SetValue(power)
-        frame.power.text:SetText(Short(power) .. " / " .. Short(maxPower))
+        Fill(frame.power, power, maxPower)
+        Amounts(frame.power.text, power, maxPower)
         frame.power:Show()
     else
         frame.power:Hide()
